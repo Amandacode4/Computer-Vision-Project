@@ -1,0 +1,13 @@
+*.zip
+*.pt
+*.pth
+data/
+datasets/
+images/
+test_set/
+train/
+__MACOSX/
+*.csv
+.DS_Store
+submission/
+Final Project Data/
