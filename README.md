@@ -1,91 +1,78 @@
-# CAIC Summer of Technology: Computer Vision Track
+# Tracking Pedestrians Through Dense Crowds
 
-## Introduction
+**Aman Dangar · IIT Delhi · CAIC Summer of Technology 2026, Computer Vision track**
 
-Welcome to the **Computer Vision (CV)** track of the CAIC Summer of Technology!
+Multi-object tracking (MOT) on crowd video with **up to 246 people in a single frame**. At that density
+people constantly hide each other, detector confidence collapses on half-visible bodies, and a
+standard SORT tracker loses identities every few frames. This repo is my attempt to keep identities
+alive through occlusion, built from first principles rather than calling `model.track()`.
 
-This vertical is designed to take you from the foundational math of neural networks to building state-of-the-art visual intelligence pipelines. You will not just learn the theories behind how computers "see," but you will actively build, optimize, and evaluate deep learning models on real-world datasets. Get ready for a hands-on journey through **image classification, object localization, and advanced vision architectures**.
-
----
-
-## Why Computer Vision?
-
-This track emphasizes **rigorous, performance-driven model building**. Here's what you'll gain:
-
-* **Deep Learning Mastery**: Move past high-level abstractions to understand what happens during forward/backward passes and convolutions.
-* **Production-Grade Frameworks**: Write idiomatic PyTorch pipelines using custom Datasets, DataLoaders, and accelerated hardware training.
-* **Modern CV Paradigms**: Master foundational network architectures like ResNet, real-time object detectors like YOLOv8, and advanced sequence-based vision algorithms.
-* **Competitive Engineering**: Put your models to the test weekly on competitive leaderboards designed to mirror real-world machine learning benchmarks.
+The final tracker is in [`Final Project/2025TT11556_FinalProject.py`](Final%20Project/2025TT11556_FinalProject.py)
+(~350 lines, NumPy + SciPy + FilterPy + Ultralytics).
 
 ---
 
-## What Problem Are We Solving?
+## The problem, in one picture
 
-Throughout the course, you will work with diverse visual datasets—ranging from classic clothing classification to satellite imagery—solving increasingly complex spatial and temporal vision tasks.
+```mermaid
+flowchart LR
+    V[Video frame] --> D["YOLOv8x @ 1920 px<br/>conf ≥ 0.01"]
+    D --> S{Split by score}
+    S -- "> 0.5" --> H[High-confidence boxes]
+    S -- "0.1 – 0.5" --> L[Low-confidence boxes]
+    T[Existing tracks] --> P["NSA Kalman predict"]
+    P --> A1["Stage 1: Hungarian on IoU<br/>with high boxes (IoU > 0.2)"]
+    H --> A1
+    A1 -- unmatched tracks --> A2["Stage 2: Hungarian on IoU<br/>with low boxes (IoU > 0.4)"]
+    L --> A2
+    A1 -- unmatched high boxes --> N[Start new tracks]
+    A2 --> U["NSA Kalman update<br/>noise ∝ 1/confidence"]
+    A1 --> U
+    U --> K["Keep tracks ≤ 30 frames unseen"]
+    K --> I["Post-process: linear interpolation<br/>across occlusion gaps"]
+```
 
-You will build end-to-end processing pipelines capable of detecting patterns in real time, optimizing model performance under challenging environmental constraints, and engineering robust deep learning systems from scratch.
+## Design decisions and why
 
-*(The grand finale project will be unredacted later in the track... Prepare yourselves! 🤫)*
+| Decision | Why |
+|---|---|
+| **Two-stage association (ByteTrack, written from scratch)** | An occluded person still produces a weak detection. SORT throws it away with the background noise. Matching *existing tracks* against low-score boxes in a second pass recovers them without letting low-score boxes start new (likely false) tracks. |
+| **Stricter IoU gate for the low-score pass (0.4 vs 0.2)** | Low-score boxes are noisier, so I only accept them when they overlap the predicted position strongly. This trades a little recall for fewer identity switches. |
+| **Noise-scale-adaptive (NSA) Kalman filter** | Measurement noise *R* is scaled by `1 + 10·(1 − confidence)`. A confident detection pulls the state hard; a doubtful one is mostly ignored in favour of the motion model. |
+| **YOLOv8x at 1920 px, detector threshold 0.01** | In a crowd, missed detections, not association, are the main failure. Larger model + higher resolution raises recall on small, distant people; the very low threshold hands every candidate to the tracker, which decides. |
+| **Track interpolation as post-processing** | When a track disappears for a few frames and reappears, I fill the gap by linear interpolation of box coordinates. Gaps are exactly where IDF1 is lost. |
+| **Tracks survive 30 frames unseen** | Long enough to bridge a typical occlusion, short enough not to re-attach to a different person. |
 
----
+## What I learned
 
-## Weekly Roadmap — CAIC Summer of Tech: CV Track
+- **Recall dominates in dense scenes.** Switching to a bigger detector at higher resolution changed results more than any tuning of the matcher.
+- **Confidence is information, not just a filter.** Using it twice, to route boxes between association stages and to scale Kalman noise, is the core idea of the whole pipeline.
+- **Motion-only tracking has a ceiling.** When two people cross while both are occluded, IoU alone cannot tell them apart.
 
-### Week 1: Neural Networks & CNNs
+## Limitations and next steps
 
-Focus on:
-* Understanding Neural Networks vs. Convolutional Neural Networks.
-* Theoretical math: Perceptrons, activation functions, forward/backward passes, gradient descent, and loss functions.
-* PyTorch essentials: Tensors, autograd, `nn.Module`, `Dataset`/`DataLoader` loops, and hardware acceleration via `.to(device)`.
-* CNN operations: Convolutions, kernels/filters, stride, padding, pooling, and feature maps.
+- **Appearance features.** Add a re-identification embedding (DeepSORT / BoT-SORT style) so identities survive long occlusions and crossings.
+- **Camera-motion compensation.** Global motion estimation before the Kalman predict step for moving-camera clips.
+- **Ablation.** Measure each component's contribution (two-stage vs one-stage, NSA vs fixed noise, with vs without interpolation) on HOTA / IDF1 / MOTA, so every design choice above is backed by a number.
 
----
+## Earlier weeks (foundations for the final tracker)
 
-### Week 2: ResNet & Data Augmentation
+| Week | Task | Folder |
+|---|---|---|
+| 1 | CNN from scratch in PyTorch on Fashion-MNIST | [`Week 1`](Week%201) |
+| 2 | ResNet-18 with data augmentation on EuroSAT satellite images | [`Week 2`](Week%202) |
+| 3 | Transfer learning: frozen ImageNet ResNet-18 backbone, new head | [`Week 3`](Week%203) |
+| 4–5 | Object detection with YOLOv8, Kalman filter + Hungarian matching (SORT) | [`Week 4&5`](Week%204%265) |
+| Final | Dense-crowd MOT (this README) | [`Final Project`](Final%20Project) |
 
-Focus on:
-* Deconstructing why deep networks fail (vanishing gradients, degradation problems) and how skip connections/residual blocks fix them.
-* Implementing Batch Normalization and studying the ResNet-18 architecture.
-* Understanding Data Augmentation as a regularizer to prevent overfitting and increase effective dataset size.
-* Applying common transforms: Flips, rotations, crops, color jitter, and normalization.
+## Run it
 
----
+```bash
+pip install ultralytics filterpy scipy numpy opencv-python
+python "Final Project/2025TT11556_FinalProject.py"
+```
 
-### Week 3: Transfer Learning
-
-Focus on:
-* The philosophy of Transfer Learning: Why leveraging pretrained models works.
-* Strategic paradigms: When to utilize a completely frozen backbone versus executing full model fine-tuning.
-* Learning rate considerations and optimization adjustments for pretrained architectures.
-
----
-
-### Week 4: Object Detection with YOLO & Intro to Temporal Tracking
-
-Focus on:
-* Shifting from image classification to localized object detection (bounding boxes, anchor predictions).
-* The evolution of detectors: R-CNN history leading up to the modern YOLOv8 API.
-* Evaluating detection accuracy via Intersection over Union (IoU) and mean Average Precision (mAP).
-* Introduction to tracking objects across consecutive frames using Kalman Filter motion estimation and the Hungarian algorithm.
-* Understanding the core mechanics and limitations of standard state-estimation frameworks (SORT).
-
----
-
-### Week 5: Advanced Localization & Project Kickoff
-
-Focus on:
-* Overcoming baseline tracking limitations (handling occlusions, integrating appearance/deep features, and processing low-score detections).
-* Exploring modern frameworks like DeepSORT and ByteTrack.
-* Benchmarking system continuity using industry-standard multi-object metrics.
-
----
-
-### Week 6: The Final Project 🔒 [REDACTED]
-
-TGV0J3Mgc2VlIGhvdyB3ZWxsIHlvdSBjYW4gdHJhY2sgb2JqZWN0cyB3aGVuIHRoZXkgZG9uJ3Qgd2FudCB0byBiZSBmb2xsb3dlZC4gV2VsY29tZSB0byBUaGUgTWF0cml4Lg==
+The course syllabus that framed this work is kept in [`COURSE.md`](COURSE.md).
 
 ---
-
-## Let’s Go!
-
-Train it. Optimize it. Dominate the leaderboard. 🚀
+*Contact: amandangar102@gmail.com · [LinkedIn](https://www.linkedin.com/in/amandangar/)*
