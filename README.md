@@ -19,7 +19,7 @@ flowchart LR
     V[Video frame] --> D["YOLOv8x @ 1920 px<br/>conf ≥ 0.01"]
     D --> S{Split by score}
     S -- "> 0.5" --> H[High-confidence boxes]
-    S -- "0.1 – 0.5" --> L[Low-confidence boxes]
+    S -- "0.1 to 0.5" --> L[Low-confidence boxes]
     T[Existing tracks] --> P["NSA Kalman predict"]
     P --> A1["Stage 1: Hungarian on IoU<br/>with high boxes (IoU > 0.2)"]
     H --> A1
@@ -38,8 +38,8 @@ flowchart LR
 |---|---|
 | **Two-stage association (ByteTrack, written from scratch)** | An occluded person still produces a weak detection. SORT throws it away with the background noise. Matching *existing tracks* against low-score boxes in a second pass recovers them without letting low-score boxes start new (likely false) tracks. |
 | **Stricter IoU gate for the low-score pass (0.4 vs 0.2)** | Low-score boxes are noisier, so I only accept them when they overlap the predicted position strongly. This trades a little recall for fewer identity switches. |
-| **Noise-scale-adaptive (NSA) Kalman filter** | Measurement noise *R* is scaled by `1 + 10·(1 − confidence)`. A confident detection pulls the state hard; a doubtful one is mostly ignored in favour of the motion model. |
-| **YOLOv8x at 1920 px, detector threshold 0.01** | In a crowd, missed detections, not association, are the main failure. Larger model + higher resolution raises recall on small, distant people; the very low threshold hands every candidate to the tracker, which decides. |
+| **Noise-scale-adaptive (NSA) Kalman filter** | Measurement noise *R* is scaled by `1 + 10·(1 − confidence)`. A confident detection pulls the state hard, while a doubtful one is mostly ignored in favour of the motion model. |
+| **YOLOv8x at 1920 px, detector threshold 0.01** | In a crowd, missed detections, not association, are the main failure. Larger model + higher resolution raises recall on small, distant people, and the very low threshold hands every candidate to the tracker, which decides. |
 | **Track interpolation as post-processing** | When a track disappears for a few frames and reappears, I fill the gap by linear interpolation of box coordinates. Gaps are exactly where IDF1 is lost. |
 | **Tracks survive 30 frames unseen** | Long enough to bridge a typical occlusion, short enough not to re-attach to a different person. |
 
@@ -62,7 +62,7 @@ flowchart LR
 | 1 | CNN from scratch in PyTorch on Fashion-MNIST | [`Week 1`](Week%201) |
 | 2 | ResNet-18 with data augmentation on EuroSAT satellite images | [`Week 2`](Week%202) |
 | 3 | Transfer learning: frozen ImageNet ResNet-18 backbone, new head | [`Week 3`](Week%203) |
-| 4–5 | Object detection with YOLOv8, Kalman filter + Hungarian matching (SORT) | [`Week 4&5`](Week%204%265) |
+| 4 and 5 | Object detection with YOLOv8, Kalman filter + Hungarian matching (SORT) | [`Week 4&5`](Week%204%265) |
 | Final | Dense-crowd MOT (this README) | [`Final Project`](Final%20Project) |
 
 ## Run it
